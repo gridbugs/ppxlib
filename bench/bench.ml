@@ -75,19 +75,44 @@ module Driver_dir = struct
     inputs t |> List.map (fun input -> Benchmark.create ~driver ~input)
 end
 
-module Benchmark_suite = struct
-  (* Returns the path to the currently running program *)
-  let current_exe_path () =
+module Path_to_current_exe = struct
+  (* This looks up the current executable's path in the proc filesystem which
+     is only present on linux. *)
+  let via_procfs () =
     let pid = Unix.getpid () in
-    (* This looks up the current executable's path in the proc filesystem which
-       is only present on linux. *)
     let proc_exe_path = Printf.sprintf "/proc/%d/exe" pid in
-    if Sys.file_exists proc_exe_path then Unix.readlink proc_exe_path
-    else failwith "failed to find current exe path in procfs"
+    if Sys.file_exists proc_exe_path then Some (Unix.readlink proc_exe_path)
+    else None
 
+  (* This assumes we were invoked via `make bench` and the cwd is the root of
+     the project, and finds the bench directory relative to the current working
+     directory. *)
+  let via_cwd () =
+    let cwd = Unix.getcwd () in
+    let relative_path_parts = [ "_build"; "default"; "bench"; "bench.exe" ] in
+    let absolute_path =
+      List.fold_left Filename.concat cwd relative_path_parts
+    in
+    if Sys.file_exists absolute_path then Some absolute_path else None
+
+  (* Different methods of getting the path to the current exe in order from
+     most reliable to least reliable *)
+  let methods = [ via_procfs; via_cwd ]
+
+  (* Tries each method of finding the path to the current exe in order,
+     returning the path to the current exe if one of the methods succeeds.
+     Fails if no method succeeds. *)
+  let get () =
+    let maybe_path = List.find_map (fun m -> m ()) methods in
+    match maybe_path with
+    | Some path -> path
+    | None -> failwith "couldn't determine the path to the current exe"
+end
+
+module Benchmark_suite = struct
   (* Returns the path to the directory containing the benchmark runner (this
      program) *)
-  let get_bench_dir () = Filename.dirname (current_exe_path ())
+  let get_bench_dir () = Filename.dirname (Path_to_current_exe.get ())
 
   (* Returns the list of ppxlib drivers that will be benchmarked *)
   let get_driver_dirs () =
