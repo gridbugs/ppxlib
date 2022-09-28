@@ -1,0 +1,5 @@
+; A driver with the ppx_sexp_conv plugin
+
+(executable
+ (name driver)
+ (libraries ppxlib ppx_sexp_conv))

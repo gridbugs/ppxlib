@@ -33,6 +33,7 @@ depends: [
   "base" {with-test}
   "stdio" {with-test}
   "odoc" {with-doc}
+  "yojson" {with-test}
 ]
 conflicts: [
   "ocaml-migrate-parsetree" {< "2.0.0"}

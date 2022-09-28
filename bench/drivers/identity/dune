@@ -1,0 +1,5 @@
+; A driver with no plugins
+
+(executable
+ (name driver)
+ (libraries ppxlib))
