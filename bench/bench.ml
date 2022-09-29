@@ -23,8 +23,9 @@ let time_run_blocking program args =
 
 (* Takes the path of a directory and returns a list of the full paths of the
    files contained within it *)
-let read_dir_full_paths dir =
-  Sys.readdir dir |> Array.to_list |> List.map (Filename.concat dir)
+let readdir_full_paths dir =
+  Sys.readdir dir |> Array.to_list |> List.sort String.compare
+  |> List.map (Filename.concat dir)
 
 module Input = struct
   type t = { path : string }
@@ -68,7 +69,7 @@ module Driver_dir = struct
     t
 
   let inputs t =
-    read_dir_full_paths (inputs_path t) |> List.map (fun path -> Input.{ path })
+    readdir_full_paths (inputs_path t) |> List.map (fun path -> Input.{ path })
 
   let benchmarks t =
     let driver = driver t in
@@ -113,17 +114,20 @@ module Benchmark_suite = struct
   (* Returns the path to the directory containing the benchmark runner (this
      program) *)
   let get_bench_dir () = Filename.dirname (Path_to_current_exe.get ())
+  let drivers_dir_name = "drivers"
 
   (* Returns the list of ppxlib drivers that will be benchmarked *)
   let get_driver_dirs () =
     let bench_dir = get_bench_dir () in
-    read_dir_full_paths (Filename.concat bench_dir "drivers")
+    readdir_full_paths (Filename.concat bench_dir drivers_dir_name)
     |> List.map Driver_dir.of_path
+
+  let get_benchmarks () =
+    get_driver_dirs () |> List.concat_map Driver_dir.benchmarks
 end
 
 let () =
-  Benchmark_suite.get_driver_dirs ()
-  |> List.concat_map Driver_dir.benchmarks
+  Benchmark_suite.get_benchmarks ()
   |> List.iter (fun benchmark ->
          let name = Benchmark.name benchmark in
          let time = Benchmark.time_run_blocking benchmark in
