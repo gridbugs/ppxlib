@@ -39,6 +39,46 @@ module Driver = struct
   let name { path } = Filename.basename (Filename.dirname path)
 end
 
+module Output = struct
+  module Metric = struct
+    type t = { name : string; value : Yojson.t; units : string }
+
+    let create ~name ~value ~units = { name; value; units }
+
+    let to_json { name; value; units } : Yojson.t =
+      `Assoc
+        [ ("name", `String name); ("value", value); ("units", `String units) ]
+  end
+
+  module Result = struct
+    type t = { name : string; metrics : Metric.t list }
+
+    let create ~name ~metrics = { name; metrics }
+
+    let to_json { name; metrics } : Yojson.t =
+      `Assoc
+        [
+          ("name", `String name);
+          ("metrics", `List (List.map Metric.to_json metrics));
+        ]
+  end
+
+  module Benchmark = struct
+    type t = { name : string; results : Result.t list }
+
+    let create ~name ~results = { name; results }
+
+    let to_json { name; results } =
+      `Assoc
+        [
+          ("name", `String name);
+          ("benchmarks", `List (List.map Result.to_json results));
+        ]
+  end
+
+  type t = { benchmarks : Benchmark.t list }
+end
+
 module Benchmark = struct
   type t = { driver : Driver.t; input : Input.t }
 
@@ -48,7 +88,11 @@ module Benchmark = struct
     Printf.sprintf "%s %s" (Driver.name driver) (Input.name input)
 
   let time_run_blocking { driver; input } =
-    time_run_blocking driver.path [ input.path ]
+    let time = time_run_blocking driver.path [ input.path ] in
+    let metric =
+      Output.Metric.create ~name:"time" ~value:(`Float time) ~units:"seconds"
+    in
+    ()
 end
 
 module Driver_dir = struct
@@ -57,7 +101,7 @@ module Driver_dir = struct
   let driver_name = "driver.exe"
   let inputs_dir_name = "inputs"
   let driver_path { path } = Filename.concat path driver_name
-  let driver t = Driver.{ path = driver_path t }
+  let driver t = { Driver.path = driver_path t }
   let inputs_path { path } = Filename.concat path inputs_dir_name
 
   let of_path path =
@@ -69,7 +113,7 @@ module Driver_dir = struct
     t
 
   let inputs t =
-    readdir_full_paths (inputs_path t) |> List.map (fun path -> Input.{ path })
+    readdir_full_paths (inputs_path t) |> List.map (fun path -> { Input.path })
 
   let benchmarks t =
     let driver = driver t in
